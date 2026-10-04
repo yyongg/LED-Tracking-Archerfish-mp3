@@ -12,6 +12,12 @@ Servo panServo, tiltServo;
 // initialize current pan and tilt positions
 int curPan = PAN_HOME, curTilt = TILT_HOME;
 
+// initialize structure for differential sensing values
+struct Differences {
+  float x_diff
+  float y_diff
+}
+
 // move pan and tilt servos, then wait for them to stop moving
 void moveTo(int pan, int tilt) {
   // ensure pan and tilt values are within range
@@ -31,6 +37,14 @@ void moveTo(int pan, int tilt) {
 
   // add a bigger delay if a big move was made
   delay(bigMove ? BIG_MOVE_MS : SETTLE_MS);
+}
+
+Differences float diffSenseNorm(int left, int right, int up, int down) {
+  // calculate normalized difference between sensor readings(a-b)/(a+b)
+  float x_diff_norm = static_cast<float>(right-left) / (right+left)
+  float y_diff_norm = static_cast<float>(up-down) / (up+down)
+
+  return stru
 }
 
 void setup() {

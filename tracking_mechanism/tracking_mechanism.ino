@@ -4,7 +4,17 @@ const int PAN_HOME = 90;                    // points straight ahead
 const int TILT_HOME = 90;                   // points level
 const int SETTLE_MS = 60;                   // delay after a 1 degree step
 const int BIG_MOVE_MS = 500;                // delay after a big jump
-const int LUMINOSITY_PERCENT_DIFF = 0.03    // allowable percent difference of sensor readings before balanced
+const int MAX_DEGREE_JUMP = 10;
+
+// initialize sensor pins
+const int x_l_sensor = A0;
+const int x_r_sensor = A1;
+const int y_d_sensor = A2;
+const int y_u_sensor = A3;
+
+// pan and tilt servos' pin numbers
+const int pan_pin = 9
+const int tilt_pin = 10
 
 // initialize servos
 Servo panServo, tiltServo;
@@ -39,15 +49,24 @@ void moveTo(int pan, int tilt) {
   delay(bigMove ? BIG_MOVE_MS : SETTLE_MS);
 }
 
-Differences float diffSenseNorm(int left, int right, int up, int down) {
+Differences diffSenseNorm(int left, int right, int down, int up) {
   // calculate normalized difference between sensor readings(a-b)/(a+b)
-  float x_diff_norm = static_cast<float>(right-left) / (right+left)
-  float y_diff_norm = static_cast<float>(up-down) / (up+down)
+  // x_diff > 0 : move right, - angle
+  // y_diff > 0: move down, - angle
 
-  return stru
+  Differences diffs;
+  diffs.x_diff = static_cast<float>(left-right) / (right+left);
+  diffs.y_diff = static_cast<float>(up-down) / (up+down);
+  return diffs
 }
 
 void setup() {
+  // initialize pin modes
+  pinMode(x_l_sensor, INPUT);
+  pinMode(x_r_sensor, INPUT);
+  pinMode(y_d_sensor, INPUT);
+  pinMode(y_u_sensor, INPUT);
+  
   panServo.attach(9);
   tiltServo.attach(10);
   moveTo(PAN_HOME, TILT_HOME);
@@ -56,4 +75,11 @@ void setup() {
 
 
 void loop() {
+  x_l = analogRead(x_l_sensor);
+  x_r = analogRead(x_r_sensor);
+  y_d = analogRead(y_d_sensor);
+  y_u = analogRead(y_u_sensor);
+
+  diffs = diffSenseNorm(x_l,x_r,y_d,y_u)
+  moveTo(curPan - diffs.x_diff * MAX_DEGREE_JUMP, curTilt - diffs.y_diff * MAX_DEGREE_JUMP)
 }

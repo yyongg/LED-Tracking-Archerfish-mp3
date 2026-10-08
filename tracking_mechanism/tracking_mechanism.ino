@@ -1,10 +1,12 @@
 #include <Servo.h>
 
+// constants
 const int PAN_HOME = 90;                    // points straight ahead
 const int TILT_HOME = 90;                   // points level
 const int SETTLE_MS = 60;                   // delay after a 1 degree step
 const int BIG_MOVE_MS = 500;                // delay after a big jump
-const int MAX_DEGREE_JUMP = 10;
+const int MAX_DEGREE_JUMP = 5;              // maximum number of degrees the servos can jump at once
+const int FOUND_THRESHOLD = 0.02;            // Error thereshold for marking LED as found
 
 // initialize sensor pins
 const int x_l_sensor = A0;
@@ -15,6 +17,9 @@ const int y_u_sensor = A3;
 // pan and tilt servos' pin numbers
 const int pan_pin = 9
 const int tilt_pin = 10
+
+// boolean for if LED is found (tracking successful)
+bool LED_found = LOW;
 
 // initialize servos
 Servo panServo, tiltServo;
@@ -57,7 +62,7 @@ Differences diffSenseNorm(int left, int right, int down, int up) {
   Differences diffs;
   diffs.x_diff = static_cast<float>(left-right) / (right+left);
   diffs.y_diff = static_cast<float>(up-down) / (up+down);
-  return diffs
+  return diffs;
 }
 
 void setup() {
@@ -67,12 +72,12 @@ void setup() {
   pinMode(y_d_sensor, INPUT);
   pinMode(y_u_sensor, INPUT);
   
+  // initialize servos
   panServo.attach(9);
   tiltServo.attach(10);
   moveTo(PAN_HOME, TILT_HOME);
   delay(BIG_MOVE_MS);
 }
-
 
 void loop() {
   x_l = analogRead(x_l_sensor);
@@ -80,6 +85,12 @@ void loop() {
   y_d = analogRead(y_d_sensor);
   y_u = analogRead(y_u_sensor);
 
-  diffs = diffSenseNorm(x_l,x_r,y_d,y_u)
-  moveTo(curPan - diffs.x_diff * MAX_DEGREE_JUMP, curTilt - diffs.y_diff * MAX_DEGREE_JUMP)
+  diffs = diffSenseNorm(x_l,x_r,y_d,y_u);
+
+  if (sqrt(pow(diffs.x_diff,2) + pow(diffs.y_diff,2)) < FOUND_THRESHOLD) { // if servos pointing substantially close at LED
+    LED_found = true;
+  }
+  else {
+    moveTo(curPan - diffs.x_diff * MAX_DEGREE_JUMP, curTilt - diffs.y_diff * MAX_DEGREE_JUMP);
+  }
 }

@@ -14,9 +14,11 @@ const int x_r_sensor = A1;
 const int y_d_sensor = A2;
 const int y_u_sensor = A3;
 
-// pan and tilt servos' pin numbers
+// servos and laser pin numbers
 const int pan_pin = 9
 const int tilt_pin = 10
+const int laser_pin = 8;
+pinMode(laser_pin,OUTPUT);
 
 // boolean for if LED is found (tracking successful)
 bool LED_found = LOW;
@@ -87,10 +89,17 @@ void loop() {
 
   diffs = diffSenseNorm(x_l,x_r,y_d,y_u);
 
-  if (sqrt(pow(diffs.x_diff,2) + pow(diffs.y_diff,2)) < FOUND_THRESHOLD) { // if servos pointing substantially close at LED
+  // check if servos pointing at LED, otherwise move a small step towards the LED
+  if (sqrt(pow(diffs.x_diff,2) + pow(diffs.y_diff,2)) < FOUND_THRESHOLD) {
     LED_found = true;
   }
   else {
     moveTo(curPan - diffs.x_diff * MAX_DEGREE_JUMP, curTilt - diffs.y_diff * MAX_DEGREE_JUMP);
+  }
+
+  // if found
+  if (LED_found == true) {
+    // activate laser diode
+
   }
 }

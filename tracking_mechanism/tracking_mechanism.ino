@@ -6,7 +6,7 @@ const int TILT_HOME = 90;                   // points level
 const int SETTLE_MS = 60;                   // delay after a 1 degree step
 const int BIG_MOVE_MS = 500;                // delay after a big jump
 const int MAX_DEGREE_JUMP = 5;              // maximum number of degrees the servos can jump at once
-const int FOUND_THRESHOLD = 0.02;           // Error thereshold for marking LED as found
+const float FOUND_THRESHOLD = 0.02;         // Error thereshold for marking LED as found
 
 // initialize sensor pins
 const int x_l_sensor = A0;
@@ -88,6 +88,10 @@ void setup() {
   tiltServo.attach(10);
   moveTo(PAN_HOME, TILT_HOME);
   delay(BIG_MOVE_MS);
+
+  // initialize sensor values
+  int x_l, x_r, y_d, y_u;
+  x_l = x_r = y_d = y_u = 0;
 }
 
 void loop() {
@@ -108,8 +112,10 @@ void loop() {
 
   // if found
   if (LED_found == true) {
-    digitalWrite(laser_pin, HIGH) // activate laser diode
-    delay(1000)
-    bugMove(random(1,2001)) // turn on motor for random time between 1 ms - 2000 ms
+    digitalWrite(laser_pin, HIGH); // activate laser diode
+    delay(1000);
+    digitalWrite(laser_pin, LOW);
+    bugMove(random(1,2001)); // turn on motor for random time between 1 ms - 2000 ms
+    LED_found = false;
   }
 }

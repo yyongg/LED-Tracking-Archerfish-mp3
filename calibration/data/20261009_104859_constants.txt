@@ -1,0 +1,5 @@
+// calibration from calibration/calibrate.py, 20261009_104859
+const float OFF_TL = 73.5, OFF_TR = 85.5, OFF_BL = 80.4, OFF_BR = 76.0;
+const float GAIN_TL = 0.995, GAIN_TR = 1.011, GAIN_BL = 0.998, GAIN_BR = 0.997;
+// suggested FOUND_THRESHOLD = 0.0010
+// suggested MIN_BRIGHTNESS = 145

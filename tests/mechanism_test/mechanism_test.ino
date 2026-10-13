@@ -17,6 +17,7 @@
 //   5. b                     - servo stress: if "=== BOOT ===" reappears, the Arduino browned out
 //   6. n                     - wheel ramp: note the lowest speed where the wheel turns reliably
 //   7. l                     - laser pulse
+//   8. f                     - full cycle: track, then laser and wheel motor, like tracking_mechanism.ino
 //
 // Pins, limits and tracking math match tracking_mechanism.ino. If you change them
 // there, change them here too.
@@ -26,13 +27,14 @@ const int PAN_HOME = 90;                    // points straight ahead
 const int TILT_HOME = 90;                   // points level
 const int PAN_MIN = 0, PAN_MAX = 180;
 // tilt angles in this code: higher = up, lower = down (90 = level)
-const bool PAN_REVERSED = false;            // true = pan servo turns the opposite way, so write 180 - pan to it
+const bool PAN_REVERSED = true;            // true = pan servo turns the opposite way, so write 180 - pan to it
 const bool TILT_REVERSED = true;            // servo is mounted flipped, so write 180 - tilt to it
 const int TILT_MIN = 80, TILT_MAX = 150;    // TILT_MIN = farthest down, TILT_MAX = farthest up; keep the sensor from hitting the mount
 const int SETTLE_MS = 60;                   // delay after each servo step
 const int MAX_DEGREE_JUMP = 5;              // maximum number of degrees the servos can jump at once
 const float TRACK_GAIN = 30;                // degrees of servo step per unit of x_diff / y_diff, copy from tracking_mechanism.ino
 const float FOUND_THRESHOLD = 0.02;         // error below which an axis stops moving, copy from tracking_mechanism.ino
+const int BUG_MOTOR_SPEED = 100;            // wheel motor speed (0-255) in the full cycle test, copy from tracking_mechanism.ino
 
 // initialize sensor pins (2x2 square, as seen from behind the head looking at the LED)
 const int tl_sensor = A0;   // top left
@@ -50,7 +52,7 @@ Servo panServo, tiltServo;
 
 // initialize motor shield and bug wheel motor (port M1)
 Adafruit_MotorShield AFMS = Adafruit_MotorShield();
-Adafruit_DCMotor *bugMotor = AFMS.getMotor(1);
+Adafruit_DCMotor *bugMotor = AFMS.getMotor(4);
 bool shieldFound = false;
 
 // initialize current pan and tilt positions
@@ -169,6 +171,38 @@ void trackTest() {
   }
 }
 
+// run the full cycle like tracking_mechanism.ino: track, then fire the laser and move the bug
+void fullTest() {
+  Serial.println("full cycle: track, laser, wheel motor (any key stops)");
+  if (!shieldFound) Serial.println("motor shield not found, the motor step will be skipped");
+  Serial.println("ms,tl,tr,bl,br,x_diff,y_diff,pan,tilt,bright");
+  float x, y;
+  while (!stopRequested()) {
+    if (!readSensors(x, y)) {
+      delay(SETTLE_MS);
+    }
+    else if (sqrt(x * x + y * y) < FOUND_THRESHOLD) {
+      unsigned long duration = random(1, 2001);
+      Serial.print("found: laser 1 s, then motor ");
+      Serial.print(duration);
+      Serial.println(" ms");
+      digitalWrite(laser_pin, HIGH);
+      delay(1000);
+      digitalWrite(laser_pin, LOW);
+      if (shieldFound) {
+        bugMotor->setSpeed(BUG_MOTOR_SPEED);
+        bugMotor->run(FORWARD);
+        delay(duration);
+        bugMotor->run(RELEASE);
+      }
+    }
+    else {
+      // y > 0 means the LED is above, so tilt up (higher tilt)
+      moveTo(curPan - trackStep(x), curTilt + trackStep(y));
+    }
+  }
+}
+
 // slam both servos between extremes to check for brownouts
 void stressTest() {
   Serial.println("servo stress, 20 cycles. If === BOOT === appears, the Arduino reset (brownout).");
@@ -187,15 +221,15 @@ void stressTest() {
   Serial.println("stress done, no reset");
 }
 
-// run the wheel motor at one speed for a few seconds
+// run the wheel motor at one speed for a few seconds, negative speed = backward
 void motorRun(int speed) {
   if (!shieldFound) { Serial.println("motor shield not found"); return; }
-  speed = constrain(speed, 0, 255);
+  speed = constrain(speed, -255, 255);
   Serial.print("motor at ");
   Serial.print(speed);
   Serial.println(" for 3 s (any key stops)");
-  bugMotor->setSpeed(speed);
-  bugMotor->run(FORWARD);
+  bugMotor->setSpeed(abs(speed));
+  bugMotor->run(speed < 0 ? BACKWARD : FORWARD);
   unsigned long start = millis();
   while (millis() - start < 3000) {
     if (stopRequested()) break;
@@ -240,7 +274,8 @@ void printHelp() {
   Serial.println("  r          stream sensor readings");
   Serial.println("  k          track a handheld LED (no laser, no motor)");
   Serial.println("  b          servo stress / brownout test");
-  Serial.println("  m<speed>   run wheel motor at 0-255 for 3 s, e.g. m80");
+  Serial.println("  f          full cycle: track, then laser and wheel motor");
+  Serial.println("  m<speed>   run wheel motor at 0-255 for 3 s, e.g. m80 (m-80 = backward)");
   Serial.println("  n          ramp wheel motor to find minimum speed");
   Serial.println("  l          laser on for 1 s");
   Serial.println("  ?          this list");
@@ -295,6 +330,7 @@ void loop() {
     case 'r': sensorTest(); break;
     case 'k': trackTest(); break;
     case 'b': stressTest(); break;
+    case 'f': fullTest(); break;
     case 'm': motorRun(value); break;
     case 'n': motorRamp(); break;
     case 'l': laserTest(); break;

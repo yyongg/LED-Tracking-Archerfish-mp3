@@ -1,11 +1,15 @@
 #include <Servo.h>
 #include <Adafruit_MotorShield.h>
 
+// per-sensor calibration (OFF_*, GAIN_*) and MIN_BRIGHTNESS, calibrated = (raw - OFF) * GAIN
+// generated from the latest calibration run by calibration/apply.py, do not edit by hand
+#include "calibration_values.h"
+
 // constants
 const int PAN_HOME = 90;                    // points straight ahead
 const int TILT_HOME = 90;                   // points level
 // tilt angles in this code: higher = up, lower = down (90 = level)
-const bool PAN_REVERSED = false;            // true = pan servo turns the opposite way, so write 180 - pan to it
+const bool PAN_REVERSED = true;            // true = pan servo turns the opposite way, so write 180 - pan to it
 const bool TILT_REVERSED = true;            // servo is mounted flipped, so write 180 - tilt to it
 const int TILT_MIN = 30, TILT_MAX = 150;    // TILT_MIN = farthest down, TILT_MAX = farthest up; keep the sensor from hitting the mount
 const int SETTLE_MS = 60;                  // delay after each servo step
@@ -13,8 +17,9 @@ const int BIG_MOVE_MS = 500;                // delay after a big jump (homing)
 const int MAX_DEGREE_JUMP = 5;              // maximum number of degrees the servos can jump at once
 const float TRACK_GAIN = 30;                // degrees of servo step per unit of x_diff / y_diff (tune: too low = sluggish, too high = overshoot)
 const float FOUND_THRESHOLD = 0.02;         // Error threshold for marking LED as found (placeholder, set from characterization)
-const int MIN_BRIGHTNESS = 200;             // minimum summed reading of all 4 sensors to count as seeing the LED (placeholder, set from characterization)
-const int BUG_MOTOR_SPEED = 100;            // wheel motor speed (0-255)
+const int BUG_MOTOR_SPEED = 170;            // wheel motor speed (0-255)
+const int LASER_TILT_OFFSET = 10;            // degrees to tilt up before firing, because the laser hits below the LED
+                                            // (~2 deg corrects 1 cm at ~30 cm; raise it if still low, lower it if high)
 
 // initialize sensor pins (2x2 square, as seen from behind the head looking at the LED)
 const int tl_sensor = A0;   // top left
@@ -80,8 +85,13 @@ void bugMove(unsigned long duration) {
   bugMotor->run(RELEASE);
 }
 
-Differences diffSenseNorm(int tl, int tr, int bl, int br) {
-  // calculate normalized difference for a 2x2 sensor square
+// apply calibration to a raw reading, never below 0
+float calibrate(int raw, float off, float gain) {
+  return max(0.0, (raw - off) * gain);
+}
+
+Differences diffSenseNorm(float tl, float tr, float bl, float br) {
+  // calculate normalized difference for a 2x2 sensor square of calibrated readings
   // x_diff = (left column - right column) / total
   // y_diff = (top row - bottom row) / total
   // x_diff > 0: left column brighter, LED is to the left
@@ -132,12 +142,18 @@ void loop() {
   int bl = analogRead(bl_sensor);
   int br = analogRead(br_sensor);
 
+  // calibrate so every sensor reads the same for the same light
+  float c_tl = calibrate(tl, OFF_TL, GAIN_TL);
+  float c_tr = calibrate(tr, OFF_TR, GAIN_TR);
+  float c_bl = calibrate(bl, OFF_BL, GAIN_BL);
+  float c_br = calibrate(br, OFF_BR, GAIN_BR);
+
   // only track if the sensors see enough light (also prevents divide by zero)
-  bool bright = (tl + tr + bl + br >= MIN_BRIGHTNESS);
+  bool bright = (c_tl + c_tr + c_bl + c_br >= MIN_BRIGHTNESS);
 
   Differences diffs = {0, 0};
   if (bright) {
-    diffs = diffSenseNorm(tl, tr, bl, br);
+    diffs = diffSenseNorm(c_tl, c_tr, c_bl, c_br);
 
     // check if servos pointing at LED (both axes inside FOUND_THRESHOLD, the same test trackStep
     // uses to stop moving), otherwise move a small step towards the LED
@@ -146,7 +162,15 @@ void loop() {
     }
     else {
       // y_diff > 0 means the LED is above, so tilt up (higher tilt)
+      int lastPan = curPan, lastTilt = curTilt;
       moveTo(curPan - trackStep(diffs.x_diff), curTilt + trackStep(diffs.y_diff));
+
+      // if the servo limits stopped every axis that still needed to move, the LED is out of
+      // range; this is as close as the head can get, so fire from here anyway
+      if (curPan == lastPan && curTilt == lastTilt) {
+        Serial.println("LED out of range, at servo limit, firing anyway");
+        LED_found = true;
+      }
     }
   }
 
@@ -165,9 +189,13 @@ void loop() {
 
   // if found
   if (LED_found == true) {
+    // tilt up to correct the laser hitting below the LED, fire, then return to the tracked position
+    int aimedTilt = curTilt;
+    moveTo(curPan, curTilt + LASER_TILT_OFFSET);
     digitalWrite(laser_pin, HIGH); // activate laser diode
     delay(1000);
     digitalWrite(laser_pin, LOW);
+    moveTo(curPan, aimedTilt);
     bugMove(random(1, 2001)); // turn on motor for random time between 1 ms - 2000 ms
     LED_found = false;
     waitForStart();

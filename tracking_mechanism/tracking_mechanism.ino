@@ -35,7 +35,7 @@ Servo panServo, tiltServo;
 
 // initialize motor shield and bug wheel motor (port M1)
 Adafruit_MotorShield AFMS = Adafruit_MotorShield();
-Adafruit_DCMotor *bugMotor = AFMS.getMotor(1);
+Adafruit_DCMotor *bugMotor = AFMS.getMotor(4);
 
 // initialize current pan and tilt positions
 int curPan = PAN_HOME, curTilt = TILT_HOME;
@@ -139,8 +139,9 @@ void loop() {
   if (bright) {
     diffs = diffSenseNorm(tl, tr, bl, br);
 
-    // check if servos pointing at LED, otherwise move a small step towards the LED
-    if (sqrt(pow(diffs.x_diff, 2) + pow(diffs.y_diff, 2)) < FOUND_THRESHOLD) {
+    // check if servos pointing at LED (both axes inside FOUND_THRESHOLD, the same test trackStep
+    // uses to stop moving), otherwise move a small step towards the LED
+    if (trackStep(diffs.x_diff) == 0 && trackStep(diffs.y_diff) == 0) {
       LED_found = true;
     }
     else {
@@ -169,5 +170,16 @@ void loop() {
     digitalWrite(laser_pin, LOW);
     bugMove(random(1, 2001)); // turn on motor for random time between 1 ms - 2000 ms
     LED_found = false;
+    waitForStart();
   }
+}
+
+// pause until the user sends anything over Serial, so each tracking cycle is started by hand
+void waitForStart() {
+  Serial.println("cycle done, press Enter in the Serial Monitor to start the next one");
+  while (Serial.available()) Serial.read();   // drop anything typed during the cycle
+  while (!Serial.available());                // wait for input
+  delay(10);                                  // let the rest of the line arrive
+  while (Serial.available()) Serial.read();
+  Serial.println("ms,tl,tr,bl,br,x_diff,y_diff,pan,tilt,bright,found");
 }

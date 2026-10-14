@@ -13,7 +13,8 @@
 //   1. h, then p/t/a/d/w/x   - servos move, home points straight ahead and level
 //   2. s                     - full sweep: no binding, wires have slack, tilt limits clear the mount
 //   3. r                     - live sensors: cover each sensor and check its column drops
-//   4. k                     - tracking only (no laser, no motor): head turns TOWARD a handheld LED
+//   4. k                     - tracking only (no laser, no motor): head turns TOWARD a handheld LED,
+//                              and the found column reads 1 once it stops on the LED
 //   5. b                     - servo stress: if "=== BOOT ===" reappears, the Arduino browned out
 //   6. n                     - wheel ramp: note the lowest speed where the wheel turns reliably
 //   7. l                     - laser pulse
@@ -119,7 +120,9 @@ bool readSensors(float &x_diff, float &y_diff) {
   Serial.print(y_diff, 4);  Serial.print(',');
   Serial.print(curPan);     Serial.print(',');
   Serial.print(curTilt);    Serial.print(',');
-  Serial.println(bright);
+  Serial.print(bright);     Serial.print(',');
+  // found = both axes inside FOUND_THRESHOLD, same check as tracking_mechanism.ino
+  Serial.println(bright && trackStep(x_diff) == 0 && trackStep(y_diff) == 0);
   return bright;
 }
 
@@ -138,7 +141,7 @@ void sweepTest() {
 
 // stream sensor readings until stopped
 void sensorTest() {
-  Serial.println("ms,tl,tr,bl,br,x_diff,y_diff,pan,tilt,bright (any key stops)");
+  Serial.println("ms,tl,tr,bl,br,x_diff,y_diff,pan,tilt,bright,found (any key stops)");
   float x, y;
   while (!stopRequested()) {
     readSensors(x, y);
@@ -158,7 +161,7 @@ int trackStep(float diff) {
 // run the tracking loop with no laser and no motor
 void trackTest() {
   Serial.println("tracking, no laser or motor (any key stops)");
-  Serial.println("ms,tl,tr,bl,br,x_diff,y_diff,pan,tilt,bright");
+  Serial.println("ms,tl,tr,bl,br,x_diff,y_diff,pan,tilt,bright,found");
   float x, y;
   while (!stopRequested()) {
     if (readSensors(x, y)) {
@@ -175,13 +178,14 @@ void trackTest() {
 void fullTest() {
   Serial.println("full cycle: track, laser, wheel motor (any key stops)");
   if (!shieldFound) Serial.println("motor shield not found, the motor step will be skipped");
-  Serial.println("ms,tl,tr,bl,br,x_diff,y_diff,pan,tilt,bright");
+  Serial.println("ms,tl,tr,bl,br,x_diff,y_diff,pan,tilt,bright,found");
   float x, y;
   while (!stopRequested()) {
     if (!readSensors(x, y)) {
       delay(SETTLE_MS);
     }
-    else if (sqrt(x * x + y * y) < FOUND_THRESHOLD) {
+    // found = both axes inside FOUND_THRESHOLD, the same test trackStep uses to stop moving
+    else if (trackStep(x) == 0 && trackStep(y) == 0) {
       unsigned long duration = random(1, 2001);
       Serial.print("found: laser 1 s, then motor ");
       Serial.print(duration);

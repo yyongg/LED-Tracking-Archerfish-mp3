@@ -19,7 +19,6 @@ const float TRACK_GAIN = 30;                // degrees of servo step per unit of
 const float FOUND_THRESHOLD = 0.02;         // Error threshold for marking LED as found (placeholder, set from characterization)
 const int BUG_MOTOR_SPEED = 170;            // wheel motor speed (0-255)
 const int LASER_TILT_OFFSET = 10;            // degrees to tilt up before firing, because the laser hits below the LED
-                                            // (~2 deg corrects 1 cm at ~30 cm; raise it if still low, lower it if high)
 
 // initialize sensor pins (2x2 square, as seen from behind the head looking at the LED)
 const int tl_sensor = A0;   // top left

@@ -27,6 +27,7 @@
 const int PAN_HOME = 90;                    // points straight ahead
 const int TILT_HOME = 90;                   // points level
 const int PAN_MIN = 0, PAN_MAX = 180;
+
 // tilt angles in this code: higher = up, lower = down (90 = level)
 const bool PAN_REVERSED = true;            // true = pan servo turns the opposite way, so write 180 - pan to it
 const bool TILT_REVERSED = true;            // servo is mounted flipped, so write 180 - tilt to it
@@ -35,8 +36,7 @@ const int SETTLE_MS = 60;                   // delay after each servo step
 const int MAX_DEGREE_JUMP = 5;              // maximum number of degrees the servos can jump at once
 const float TRACK_GAIN = 30;                // degrees of servo step per unit of x_diff / y_diff, copy from tracking_mechanism.ino
 const float FOUND_THRESHOLD = 0.02;         // error below which an axis stops moving, copy from tracking_mechanism.ino
-const int BUG_MOTOR_SPEED = 80;            // wheel motor speed (0-255) in the full cycle test, copy from tracking_mechanism.ino
-const int LASER_TILT_OFFSET = 10;           // degrees to tilt up before firing (laser hits below the LED), copy from tracking_mechanism.ino
+const int BUG_MOTOR_SPEED = 100;            // wheel motor speed (0-255) in the full cycle test, copy from tracking_mechanism.ino
 
 // initialize sensor pins (2x2 square, as seen from behind the head looking at the LED)
 const int tl_sensor = A0;   // top left
@@ -175,65 +175,36 @@ void trackTest() {
   }
 }
 
-// fire like tracking_mechanism.ino: tilt up by LASER_TILT_OFFSET, laser 1 s, back to the
-// tracked position, then run the wheel for a random time
-void fireCycle() {
-  unsigned long duration = random(1, 2001);
-  Serial.print("laser 1 s, then motor ");
-  Serial.print(duration);
-  Serial.println(" ms");
-  int aimedTilt = curTilt;
-  moveTo(curPan, curTilt + LASER_TILT_OFFSET);
-  digitalWrite(laser_pin, HIGH);
-  delay(1000);
-  digitalWrite(laser_pin, LOW);
-  moveTo(curPan, aimedTilt);
-  if (shieldFound) {
-    bugMotor->setSpeed(BUG_MOTOR_SPEED);
-    bugMotor->run(FORWARD);
-    delay(duration);
-    bugMotor->run(RELEASE);
-  }
-}
-
-// run the full cycle like tracking_mechanism.ino: track, fire the laser, move the bug, then
-// pause until Enter starts the next cycle (q + Enter ends the test)
+// run the full cycle like tracking_mechanism.ino: track, then fire the laser and move the bug
 void fullTest() {
-  Serial.println("full cycle: track, laser, wheel motor (any key stops while tracking)");
+  Serial.println("full cycle: track, laser, wheel motor (any key stops)");
   if (!shieldFound) Serial.println("motor shield not found, the motor step will be skipped");
   Serial.println("ms,tl,tr,bl,br,x_diff,y_diff,pan,tilt,bright,found");
   float x, y;
   while (!stopRequested()) {
     if (!readSensors(x, y)) {
       delay(SETTLE_MS);
-      continue;
     }
-
     // found = both axes inside FOUND_THRESHOLD, the same test trackStep uses to stop moving
-    bool fire = (trackStep(x) == 0 && trackStep(y) == 0);
-    if (fire) {
-      Serial.println("found");
+    else if (trackStep(x) == 0 && trackStep(y) == 0) {
+      unsigned long duration = random(1, 2001);
+      Serial.print("found: laser 1 s, then motor ");
+      Serial.print(duration);
+      Serial.println(" ms");
+      digitalWrite(laser_pin, HIGH);
+      delay(1000);
+      digitalWrite(laser_pin, LOW);
+      if (shieldFound) {
+        bugMotor->setSpeed(BUG_MOTOR_SPEED);
+        bugMotor->run(FORWARD);
+        delay(duration);
+        bugMotor->run(RELEASE);
+      }
     }
     else {
       // y > 0 means the LED is above, so tilt up (higher tilt)
-      int lastPan = curPan, lastTilt = curTilt;
       moveTo(curPan - trackStep(x), curTilt + trackStep(y));
-
-      // the servo limits stopped every axis that still needed to move: fire from here anyway
-      if (curPan == lastPan && curTilt == lastTilt) {
-        Serial.println("LED out of range, at servo limit, firing anyway");
-        fire = true;
-      }
     }
-    if (!fire) continue;
-
-    fireCycle();
-    Serial.println("cycle done, press Enter for the next one, or q + Enter to stop");
-    while (!Serial.available());
-    String reply = Serial.readStringUntil('\n');
-    reply.trim();
-    if (reply == "q") { Serial.println("stopped"); return; }
-    Serial.println("ms,tl,tr,bl,br,x_diff,y_diff,pan,tilt,bright,found");
   }
 }
 

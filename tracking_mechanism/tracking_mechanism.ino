@@ -197,16 +197,5 @@ void loop() {
     moveTo(curPan, aimedTilt);
     bugMove(random(1, 2001)); // turn on motor for random time between 1 ms - 2000 ms
     LED_found = false;
-    waitForStart();
   }
-}
-
-// pause until the user sends anything over Serial, so each tracking cycle is started by hand
-void waitForStart() {
-  Serial.println("cycle done, press Enter in the Serial Monitor to start the next one");
-  while (Serial.available()) Serial.read();   // drop anything typed during the cycle
-  while (!Serial.available());                // wait for input
-  delay(10);                                  // let the rest of the line arrive
-  while (Serial.available()) Serial.read();
-  Serial.println("ms,tl,tr,bl,br,x_diff,y_diff,pan,tilt,bright,found");
 }
